@@ -29,8 +29,7 @@ A production-ready Go HTTP authentication service using **JWT (access + refresh 
 Before running this project, ensure you have the following installed:
 
 - [Go 1.26+](https://go.dev/dl/)
-- [PostgreSQL 14+](https://www.postgresql.org/download/)
-- [Redis 7+](https://redis.io/download/)
+- [Docker & Docker Compose](https://docs.docker.com/get-docker/) (for PostgreSQL and Redis)
 - [sqlc](https://docs.sqlc.dev/en/stable/overview/install.html) (for code generation)
 
 ## Setup
@@ -54,44 +53,76 @@ Then edit `.env` with your configuration. The required variables are:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://postgres:mypassword@localhost:5432/jwtlogin?sslmode=disable` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://postgres:mysecretpassword@localhost:5432/jwtlogin?sslmode=disable` |
 | `REDIS_ADDR` | Redis address | `localhost:6379` |
 | `ACCESS_SECRET` | Secret key for signing access tokens (base64-encoded, 32 bytes) | `QhwgEEM5qTxGhOAgnhmu4Vq7GcC8bXEBdg5jq/j+YfQ=` |
 | `REFRESH_SECRET` | Secret key for signing refresh tokens (base64-encoded, 32 bytes) | `jqw3DxMJSiEBP+VX1YoRe8x02p8SeC8sgCUyMha6dIY=` |
 | `APP_ENV` | Application environment (`development`, `staging`, `production`) | `development` |
 
-> **Security Note:** In production, generate strong secrets using:
+> **Generating Secrets:** Generate secure keys for your environment:
 > ```bash
+> # Access token secret (32 bytes, base64-encoded)
+> openssl rand -base64 32
+> 
+> # Refresh token secret (32 bytes, base64-encoded)
 > openssl rand -base64 32
 > ```
-> Never commit your `.env` file to version control — it is listed in `.gitignore`.
+> Copy the output values into your `.env` file for `ACCESS_SECRET` and `REFRESH_SECRET`. Never commit secrets to version control — `.env` is listed in `.gitignore`.
 
-### 3. Set up PostgreSQL
+### 3. Set up PostgreSQL (Docker)
 
-Create the database (the name must match `DATABASE_URL`):
-
-```sql
-CREATE DATABASE jwtlogin;
-```
-
-Ensure your connection string includes the correct username, password, host, port, and database name.
-
-### 4. Start Redis
+Start a PostgreSQL container:
 
 ```bash
-redis-server
+docker run -d \
+  --name postgresql-jwt \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=mysecretpassword \
+  -e POSTGRES_DB=jwtlogin \
+  -p 5432:5432 \
+  postgres:16-alpine
 ```
 
-Or use Docker:
+Verify it's running:
 
 ```bash
-docker run -d -p 6379:6379 --name redis redis:latest
+docker exec -it postgresql-jwt psql -U postgres -d jwtlogin -c "SELECT 1;"
+```
+
+### 4. Set up Redis (Docker)
+
+Start a Redis container:
+
+```bash
+docker run -d \
+  --name redis \
+  -p 6379:6379 \
+  redis:latest
+```
+
+Check if it's running:
+
+```bash
+docker ps | grep redis
+```
+
+If the container was previously created but is stopped, start it with:
+
+```bash
+docker start redis
+```
+
+Test the connection via the Redis CLI:
+
+```bash
+docker exec -it redis redis-cli ping
+# Expected output: PONG
 ```
 
 ### 5. Install Go dependencies
 
 ```bash
-go mod download
+go mod tidy
 ```
 
 ## Running the Application
